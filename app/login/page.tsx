@@ -80,7 +80,10 @@ export default function LoginPage() {
             {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
           </button>
         </div>
-
+<p style={{ fontSize: 13, color: "#666", textAlign: "center", marginTop: 8 }}>
+  Hesabın yok mu?{" "}
+  <a href="/register" style={{ color: "#4a4af4", textDecoration: "none" }}>Kayıt ol</a>
+</p>
         <p style={{ fontSize: 12, color: "#444", textAlign: "center", marginTop: 24 }}>Core AI — Güvenli Yapay Zeka Platformu</p>
       </div>
     </div>
