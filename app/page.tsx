@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type Message = { role: "user" | "assistant"; content: string };
 type Lang = "tr" | "en";
@@ -32,7 +34,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const t = i18n[lang];
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login");
+  }, [status, router]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -41,6 +49,14 @@ export default function Home() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  if (status === "loading" || !session) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0a0a0f" }}>
+        <div style={{ color: "#666", fontSize: 14 }}>Yükleniyor...</div>
+      </div>
+    );
+  }
 
   const getTime = () => {
     const d = new Date();
@@ -54,7 +70,6 @@ export default function Home() {
     setMessages(newHistory);
     setInput("");
     setLoading(true);
-
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -70,10 +85,7 @@ export default function Home() {
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send(input);
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
   };
 
   const resizeTextarea = () => {
@@ -97,6 +109,7 @@ export default function Home() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "var(--text2)" }}>👤 {session.user?.name}</span>
             <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
               {(["tr", "en"] as Lang[]).map((l) => (
                 <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 11px", fontSize: 12, border: "none", background: lang === l ? "#4a4af4" : "transparent", color: lang === l ? "#fff" : "var(--text2)", cursor: "pointer" }}>
@@ -106,6 +119,9 @@ export default function Home() {
             </div>
             <button onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={{ width: 32, height: 32, border: "1px solid var(--border)", borderRadius: 8, background: "transparent", cursor: "pointer", fontSize: 16, color: "var(--text2)" }}>
               {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+            <button onClick={() => signOut({ callbackUrl: "/login" })} style={{ padding: "5px 12px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 8, background: "transparent", color: "var(--text2)", cursor: "pointer" }}>
+              Çıkış
             </button>
           </div>
         </div>
@@ -120,7 +136,7 @@ export default function Home() {
           {messages.map((m, i) => (
             <div key={i} style={{ display: "flex", gap: 10, maxWidth: "85%", alignSelf: m.role === "user" ? "flex-end" : "flex-start", flexDirection: m.role === "user" ? "row-reverse" : "row" }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: m.role === "assistant" ? "linear-gradient(135deg,#4a4af4,#9b59f7)" : "var(--bg2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: m.role === "assistant" ? "#fff" : "var(--text2)", flexShrink: 0, marginTop: 2, border: m.role === "user" ? "1px solid var(--border)" : "none" }}>
-                {m.role === "assistant" ? "C" : "S"}
+                {m.role === "assistant" ? "C" : (session.user?.name?.[0]?.toUpperCase() || "U")}
               </div>
               <div style={{ padding: "10px 14px", borderRadius: 14, fontSize: 14, lineHeight: 1.6, background: m.role === "user" ? "#4a4af4" : "var(--bubble-ai)", color: m.role === "user" ? "#fff" : "var(--bubble-ai-text)", borderBottomRightRadius: m.role === "user" ? 4 : 14, borderBottomLeftRadius: m.role === "assistant" ? 4 : 14, border: m.role === "assistant" ? "1px solid var(--border)" : "none", whiteSpace: "pre-wrap" }}>
                 {m.content}
@@ -174,7 +190,6 @@ export default function Home() {
           </button>
         </div>
       </div>
-
       <style>{`@keyframes bounce { 0%,60%,100% { transform:translateY(0) } 30% { transform:translateY(-6px) } }`}</style>
     </div>
   );

@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SessionProvider } from "./session-provider";
 
 export const metadata: Metadata = {
   title: "Core AI",
-  description: "Your intelligent assistant",
+  description: "Güvenli Yapay Zeka Platformu",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
-      <body>{children}</body>
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }
