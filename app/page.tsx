@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-type Message = { role: "user" | "assistant"; content: string; image?: string };
+type Message = { role: "user" | "assistant"; content: string; image?: string; isGenerated?: boolean };
 type Lang = "tr" | "en";
 type Theme = "light" | "dark";
 
@@ -17,6 +17,9 @@ const i18n = {
     error: "Bir hata oluştu, tekrar dene.",
     imageAnalyze: "Bu görseli analiz et.",
     fileAnalyze: "Bu dosyayı analiz et.",
+    imaginePrefix: "🎨 Görsel oluştur: ",
+    imagineResult: "İşte oluşturduğum görsel:",
+    generating: "Görsel oluşturuluyor...",
   },
   en: {
     placeholder: "Type a message...",
@@ -27,6 +30,9 @@ const i18n = {
     error: "Something went wrong, please try again.",
     imageAnalyze: "Analyze this image.",
     fileAnalyze: "Analyze this file.",
+    imaginePrefix: "🎨 Generate image: ",
+    imagineResult: "Here's the image I generated:",
+    generating: "Generating image...",
   },
 };
 
@@ -90,6 +96,31 @@ export default function Home() {
   const removeFile = () => {
     setSelectedFile(null);
     if (fileDocRef.current) fileDocRef.current.value = "";
+  };
+
+  const generateImage = async () => {
+    const prompt = input.trim();
+    if (!prompt || loading) return;
+    setInput("");
+    setLoading(true);
+    setMessages((prev) => [...prev, { role: "user", content: `${t.imaginePrefix}${prompt}` }]);
+
+    try {
+      const res = await fetch("/api/imagine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json();
+      if (data.image) {
+        setMessages((prev) => [...prev, { role: "assistant", content: t.imagineResult, image: data.image, isGenerated: true }]);
+      } else {
+        setMessages((prev) => [...prev, { role: "assistant", content: t.error }]);
+      }
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: t.error }]);
+    }
+    setLoading(false);
   };
 
   const send = async (text: string) => {
@@ -175,8 +206,9 @@ export default function Home() {
         {/* Messages */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
           {messages.length === 0 && (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.5, fontSize: 14, color: "var(--text2)" }}>
-              {t.empty}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, opacity: 0.5 }}>
+              <div style={{ fontSize: 14, color: "var(--text2)" }}>{t.empty}</div>
+              <div style={{ fontSize: 12, color: "var(--text2)" }}>🖼 Görsel yükle • 📄 Dosya yükle • ✨ Görsel oluştur</div>
             </div>
           )}
           {messages.map((m, i) => (
@@ -185,12 +217,18 @@ export default function Home() {
                 {m.role === "assistant" ? "C" : (session.user?.name?.[0]?.toUpperCase() || "U")}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-                {m.image && (
-                  <img src={m.image} alt="uploaded" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 10, objectFit: "cover" }} />
+                {m.content && (
+                  <div style={{ padding: "10px 14px", borderRadius: 14, fontSize: 14, lineHeight: 1.6, background: m.role === "user" ? "#4a4af4" : "var(--bubble-ai)", color: m.role === "user" ? "#fff" : "var(--bubble-ai-text)", borderBottomRightRadius: m.role === "user" ? 4 : 14, borderBottomLeftRadius: m.role === "assistant" ? 4 : 14, border: m.role === "assistant" ? "1px solid var(--border)" : "none", whiteSpace: "pre-wrap" }}>
+                    {m.content}
+                  </div>
                 )}
-                <div style={{ padding: "10px 14px", borderRadius: 14, fontSize: 14, lineHeight: 1.6, background: m.role === "user" ? "#4a4af4" : "var(--bubble-ai)", color: m.role === "user" ? "#fff" : "var(--bubble-ai-text)", borderBottomRightRadius: m.role === "user" ? 4 : 14, borderBottomLeftRadius: m.role === "assistant" ? 4 : 14, border: m.role === "assistant" ? "1px solid var(--border)" : "none", whiteSpace: "pre-wrap" }}>
-                  {m.content}
-                </div>
+                {m.image && (
+                  <img
+                    src={m.image}
+                    alt="görsel"
+                    style={{ maxWidth: 300, maxHeight: 300, borderRadius: 10, objectFit: "contain", border: "1px solid var(--border)" }}
+                  />
+                )}
               </div>
               <div style={{ fontSize: 10, color: "var(--text2)", alignSelf: "flex-end", paddingBottom: 2 }}>{getTime()}</div>
             </div>
@@ -238,14 +276,17 @@ export default function Home() {
         )}
 
         {/* Input */}
-        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, alignItems: "flex-end" }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: "none" }} />
           <input ref={fileDocRef} type="file" accept=".pdf,.txt,.md" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
-          <button onClick={() => fileInputRef.current?.click()} title="Görsel yükle" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text2)", flexShrink: 0 }}>
+          <button onClick={() => fileInputRef.current?.click()} title="Görsel yükle" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 16, color: "var(--text2)", flexShrink: 0 }}>
             🖼
           </button>
-          <button onClick={() => fileDocRef.current?.click()} title="Dosya yükle (PDF, TXT)" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text2)", flexShrink: 0 }}>
+          <button onClick={() => fileDocRef.current?.click()} title="Dosya yükle" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 16, color: "var(--text2)", flexShrink: 0 }}>
             📄
+          </button>
+          <button onClick={generateImage} title="Görsel oluştur" disabled={!input.trim() || loading} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: input.trim() && !loading ? "pointer" : "not-allowed", fontSize: 16, color: "var(--text2)", flexShrink: 0, opacity: input.trim() && !loading ? 1 : 0.4 }}>
+            ✨
           </button>
           <div style={{ flex: 1, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "flex-end", padding: "2px 4px 2px 14px" }}>
             <textarea
@@ -258,11 +299,7 @@ export default function Home() {
               style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 14, color: "var(--text)", resize: "none", maxHeight: 120, minHeight: 36, padding: "8px 0", fontFamily: "inherit", lineHeight: 1.5 }}
             />
           </div>
-          <button
-            onClick={() => send(input)}
-            disabled={!canSend}
-            style={{ width: 36, height: 36, borderRadius: 10, background: "#4a4af4", border: "none", cursor: canSend ? "pointer" : "not-allowed", color: "#fff", fontSize: 18, opacity: canSend ? 1 : 0.4, flexShrink: 0 }}
-          >
+          <button onClick={() => send(input)} disabled={!canSend} style={{ width: 36, height: 36, borderRadius: 10, background: "#4a4af4", border: "none", cursor: canSend ? "pointer" : "not-allowed", color: "#fff", fontSize: 18, opacity: canSend ? 1 : 0.4, flexShrink: 0 }}>
             ↑
           </button>
         </div>
