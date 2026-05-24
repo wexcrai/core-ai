@@ -1,5 +1,7 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
+import * as pdfParseModule from "pdf-parse";
+const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
 
 const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -10,6 +12,7 @@ export async function POST(req: NextRequest) {
   const language = formData.get("language") as string;
   const messagesRaw = formData.get("messages") as string;
   const image = formData.get("image") as File | null;
+  const file = formData.get("file") as File | null;
 
   const messages = JSON.parse(messagesRaw);
 
@@ -30,15 +33,30 @@ export async function POST(req: NextRequest) {
       content: [
         {
           type: "image_url",
-          image_url: {
-            url: `data:${mimeType};base64,${base64}`,
-          },
+          image_url: { url: `data:${mimeType};base64,${base64}` },
         },
         {
           type: "text",
           text: lastMessage.content || (language === "tr" ? "Bu görseli analiz et." : "Analyze this image."),
         },
       ],
+    };
+  } else if (file) {
+    let fileText = "";
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    if (file.type === "application/pdf") {
+      const parsed = await pdfParse(buffer);
+      fileText = parsed.text;
+    } else {
+      fileText = buffer.toString("utf-8");
+    }
+
+    const userQuestion = lastMessage.content || (language === "tr" ? "Bu dosyayı analiz et." : "Analyze this file.");
+    lastMessage = {
+      role: "user",
+      content: `${userQuestion}\n\n--- DOSYA İÇERİĞİ (${file.name}) ---\n${fileText.slice(0, 8000)}`,
     };
   }
 

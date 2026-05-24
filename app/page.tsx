@@ -16,6 +16,7 @@ const i18n = {
     chips: ["Kod yaz", "Metin özetle", "Soru sor", "Fikir ver"],
     error: "Bir hata oluştu, tekrar dene.",
     imageAnalyze: "Bu görseli analiz et.",
+    fileAnalyze: "Bu dosyayı analiz et.",
   },
   en: {
     placeholder: "Type a message...",
@@ -25,6 +26,7 @@ const i18n = {
     chips: ["Write code", "Summarize text", "Ask a question", "Give ideas"],
     error: "Something went wrong, please try again.",
     imageAnalyze: "Analyze this image.",
+    fileAnalyze: "Analyze this file.",
   },
 };
 
@@ -36,9 +38,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileDocRef = useRef<HTMLInputElement>(null);
   const { data: session, status } = useSession();
   const router = useRouter();
   const t = i18n[lang];
@@ -83,16 +87,21 @@ export default function Home() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const removeFile = () => {
+    setSelectedFile(null);
+    if (fileDocRef.current) fileDocRef.current.value = "";
+  };
+
   const send = async (text: string) => {
-    if ((!text.trim() && !selectedImage) || loading) return;
+    if ((!text.trim() && !selectedImage && !selectedFile) || loading) return;
 
     const userMsg: Message = {
       role: "user",
-      content: text || t.imageAnalyze,
+      content: text || (selectedImage ? t.imageAnalyze : t.fileAnalyze),
       image: imagePreview || undefined,
     };
 
-    const apiMessages = [...messages, { role: "user" as const, content: text || t.imageAnalyze }];
+    const apiMessages = [...messages, { role: "user" as const, content: text || (selectedImage ? t.imageAnalyze : t.fileAnalyze) }];
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
@@ -101,10 +110,13 @@ export default function Home() {
     formData.append("messages", JSON.stringify(apiMessages));
     formData.append("language", lang);
     if (selectedImage) formData.append("image", selectedImage);
+    if (selectedFile) formData.append("file", selectedFile);
 
     setSelectedImage(null);
     setImagePreview(null);
+    setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (fileDocRef.current) fileDocRef.current.value = "";
 
     try {
       const res = await fetch("/api/chat", { method: "POST", body: formData });
@@ -126,6 +138,8 @@ export default function Home() {
     ta.style.height = "auto";
     ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
   };
+
+  const canSend = (input.trim() || selectedImage || selectedFile) && !loading;
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: "24px" }}>
@@ -214,11 +228,24 @@ export default function Home() {
           </div>
         )}
 
+        {/* File Preview */}
+        {selectedFile && (
+          <div style={{ padding: "0 18px 10px", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>📄</span>
+            <span style={{ fontSize: 12, color: "var(--text2)" }}>{selectedFile.name}</span>
+            <button onClick={removeFile} style={{ fontSize: 12, color: "#f87171", background: "transparent", border: "none", cursor: "pointer" }}>✕ Kaldır</button>
+          </div>
+        )}
+
         {/* Input */}
         <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-end" }}>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: "none" }} />
-          <button onClick={() => fileInputRef.current?.click()} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text2)", flexShrink: 0 }}>
+          <input ref={fileDocRef} type="file" accept=".pdf,.txt,.md" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
+          <button onClick={() => fileInputRef.current?.click()} title="Görsel yükle" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text2)", flexShrink: 0 }}>
             🖼
+          </button>
+          <button onClick={() => fileDocRef.current?.click()} title="Dosya yükle (PDF, TXT)" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text2)", flexShrink: 0 }}>
+            📄
           </button>
           <div style={{ flex: 1, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, display: "flex", alignItems: "flex-end", padding: "2px 4px 2px 14px" }}>
             <textarea
@@ -233,8 +260,8 @@ export default function Home() {
           </div>
           <button
             onClick={() => send(input)}
-            disabled={(!input.trim() && !selectedImage) || loading}
-            style={{ width: 36, height: 36, borderRadius: 10, background: "#4a4af4", border: "none", cursor: (input.trim() || selectedImage) && !loading ? "pointer" : "not-allowed", color: "#fff", fontSize: 18, opacity: (input.trim() || selectedImage) && !loading ? 1 : 0.4, flexShrink: 0 }}
+            disabled={!canSend}
+            style={{ width: 36, height: 36, borderRadius: 10, background: "#4a4af4", border: "none", cursor: canSend ? "pointer" : "not-allowed", color: "#fff", fontSize: 18, opacity: canSend ? 1 : 0.4, flexShrink: 0 }}
           >
             ↑
           </button>
