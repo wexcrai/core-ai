@@ -1,7 +1,5 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
-import * as pdfParseModule from "pdf-parse";
-const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
 
 const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -42,21 +40,13 @@ export async function POST(req: NextRequest) {
       ],
     };
   } else if (file) {
-    let fileText = "";
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
-    if (file.type === "application/pdf") {
-      const parsed = await pdfParse(buffer);
-      fileText = parsed.text;
-    } else {
-      fileText = buffer.toString("utf-8");
-    }
-
+    const fileText = buffer.toString("utf-8").slice(0, 8000);
     const userQuestion = lastMessage.content || (language === "tr" ? "Bu dosyayı analiz et." : "Analyze this file.");
     lastMessage = {
       role: "user",
-      content: `${userQuestion}\n\n--- DOSYA İÇERİĞİ (${file.name}) ---\n${fileText.slice(0, 8000)}`,
+      content: `${userQuestion}\n\n--- DOSYA İÇERİĞİ (${file.name}) ---\n${fileText}`,
     };
   }
 
